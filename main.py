@@ -1,182 +1,152 @@
 import os
 import requests
-from flask import Flask, request
-from telegram import Bot, Update, ParseMode
-from telegram.ext import Dispatcher, CommandHandler, CallbackContext
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-# ==========================
-#  SETTINGS
-# ==========================
+# ============================
+# BOT SETTINGS
+# ============================
+BOT_TOKEN = "8573740591:AAFcvHHLyp9S9JoQMM3Em6vPsXoG_ZB4Cd0"
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-API_URL = "https://veerulookup.onrender.com/search_phone?number="
+# ADMIN ID
+ADMIN_ID = 6430768414
 
-OWNER_ID = 6430768414
-ADMINS = [OWNER_ID]
+# Allowed users list
+allowed_users = {ADMIN_ID}
 
-bot = Bot(BOT_TOKEN)
 
-app = Flask(__name__)
+# ============================
+# CHECK ACCESS
+# ============================
+def is_allowed(user_id):
+    return user_id in allowed_users or user_id == ADMIN_ID
 
-# Telegram dispatcher
-dispatcher = Dispatcher(bot, None, workers=0)
 
-# ==========================
-#  ADMIN CHECK
-# ==========================
-
-def is_admin(user_id):
-    return user_id in ADMINS
-
-# ==========================
-#  SAFE MESSAGE SENDER
-# ==========================
-
-def send_long(update, text):
-    limit = 4000
-    for i in range(0, len(text), limit):
-        bot.send_message(chat_id=update.message.chat_id, text=text[i:i+limit], parse_mode=ParseMode.MARKDOWN)
-
-# ==========================
-#  COMMAND: /start
-# ==========================
-
-def start(update: Update, context: CallbackContext):
-    user = update.message.from_user.first_name
-    bot.send_message(
-        chat_id=update.message.chat_id,
-        text=f"✨ *Welcome to Ares Premium Bot 🥂*\n\nHello *{user}*!\nUse */command* to see all features.",
-        parse_mode=ParseMode.MARKDOWN
+# ============================
+# START MESSAGE
+# ============================
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "👋 **Welcome to Ares Premium Bot 🥂**\n\n"
+        "Use /commands to see available tools."
     )
 
-# ==========================
-#  COMMAND: /command
-# ==========================
 
-def command(update: Update, context: CallbackContext):
-    text = (
-        "📜 *Ares Premium Bot – Commands*\n"
-        "━━━━━━━━━━━━━━\n"
-        "🔍 `/lookup <number>` – Phone Lookup\n"
-        "➕ `/add <user_id>` – Add admin\n"
-        "➖ `/remove <user_id>` – Remove admin\n"
-        "👑 `/admins` – Show admin list\n"
-        "ℹ️ `/command` – Show this menu\n"
-        "━━━━━━━━━━━━━━"
+# ============================
+# COMMANDS LIST
+# ============================
+async def commands(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = (
+        "📜 **Ares Premium Command List**\n\n"
+        "/start – Welcome message\n"
+        "/commands – Show command list\n"
+        "/lookup <number> – Phone lookup\n"
+        "/adduser <id> – Add user (Admin only)\n"
+        "/removeuser <id> – Remove user (Admin only)\n"
+        "/users – Show allowed users\n"
     )
-    bot.send_message(chat_id=update.message.chat_id, text=text, parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text(msg)
 
-# ==========================
-#  ADMIN FUNCTIONS
-# ==========================
 
-def add_admin(update: Update, context: CallbackContext):
-    if update.message.from_user.id != OWNER_ID:
-        bot.send_message(update.message.chat_id, "❌ Only the owner can add admins.")
-        return
+# ============================
+# LOOKUP COMMAND
+# ============================
+async def lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
 
-    if len(context.args) == 0:
-        bot.send_message(update.message.chat_id, "Usage: /add <user_id>")
-        return
-
-    new_id = int(context.args[0])
-    ADMINS.append(new_id)
-    bot.send_message(update.message.chat_id, f"✅ Added admin: `{new_id}`", parse_mode=ParseMode.MARKDOWN)
-
-def remove_admin(update: Update, context: CallbackContext):
-    if update.message.from_user.id != OWNER_ID:
-        bot.send_message(update.message.chat_id, "❌ Only owner can remove admins.")
-        return
+    if not is_allowed(user_id):
+        return await update.message.reply_text("⛔ You are not authorized.")
 
     if len(context.args) == 0:
-        bot.send_message(update.message.chat_id, "Usage: /remove <user_id>")
-        return
-
-    remove_id = int(context.args[0])
-
-    if remove_id == OWNER_ID:
-        bot.send_message(update.message.chat_id, "❌ Cannot remove owner.")
-        return
-
-    if remove_id in ADMINS:
-        ADMINS.remove(remove_id)
-        bot.send_message(update.message.chat_id, f"🗑 Removed admin: `{remove_id}`", parse_mode=ParseMode.MARKDOWN)
-    else:
-        bot.send_message(update.message.chat_id, "❌ User is not admin.")
-
-def admin_list(update: Update, context: CallbackContext):
-    if not is_admin(update.message.from_user.id):
-        bot.send_message(update.message.chat_id, "❌ Access denied.")
-        return
-
-    text = "👑 *Admin List:*\n━━━━━━━━━━\n"
-    for a in ADMINS:
-        text += f"• `{a}`\n"
-    text += "━━━━━━━━━━"
-
-    bot.send_message(update.message.chat_id, text, parse_mode=ParseMode.MARKDOWN)
-
-# ==========================
-#  LOOKUP
-# ==========================
-
-def lookup(update: Update, context: CallbackContext):
-    if not is_admin(update.message.from_user.id):
-        bot.send_message(update.message.chat_id, "❌ Access denied.")
-        return
-
-    if len(context.args) == 0:
-        bot.send_message(update.message.chat_id, "Usage: /lookup 919876543210")
-        return
+        return await update.message.reply_text("❗ Usage: `/lookup 9876543210`", parse_mode="Markdown")
 
     number = context.args[0]
-    bot.send_message(update.message.chat_id, "⏳ Fetching premium data...")
+    url = f"https://veerulookup.onrender.com/search_phone?number={number}"
 
     try:
-        r = requests.get(API_URL + number)
+        r = requests.get(url, timeout=10)
         data = r.json()
 
-        msg = "📱 *Ares Premium Lookup*\n━━━━━━━━━━\n"
+        text = "📞 **Lookup Result**\n\n"
+        for item in data.get("result", []):
+            for key, value in item.items():
+                text += f"**{key}:** `{value}`\n"
 
-        for idx, item in enumerate(data["result"], start=1):
-            msg += f"🔷 *Record {idx}*\n"
-            msg += f"👤 Name: `{item['name']}`\n"
-            msg += f"📞 Mobile: `{item['mobile']}`\n"
-            msg += f"📍 Circle: `{item['circle']}`\n"
-            msg += f"👨 Father: `{item['father_name']}`\n"
-            msg += f"🏠 Address: `{item['address']}`\n"
-            msg += f"🆔 ID: `{item['id_number']}`\n"
-            msg += "━━━━━━━━━━\n"
+        if len(text) > 4000:
+            text = text[:3990] + "\n\n⚠️ Result trimmed (Telegram limit)."
 
-        send_long(update, msg)
+        await update.message.reply_text(text, parse_mode="Markdown")
 
     except Exception as e:
-        bot.send_message(update.message.chat_id, f"❌ Error: {e}")
+        await update.message.reply_text(f"❌ Lookup failed:\n`{e}`", parse_mode="Markdown")
 
-# ==========================
-#  ADD HANDLERS
-# ==========================
 
-dispatcher.add_handler(CommandHandler("start", start))
-dispatcher.add_handler(CommandHandler("command", command))
-dispatcher.add_handler(CommandHandler("lookup", lookup))
-dispatcher.add_handler(CommandHandler("add", add_admin))
-dispatcher.add_handler(CommandHandler("remove", remove_admin))
-dispatcher.add_handler(CommandHandler("admins", admin_list))
+# ============================
+# ADD USER
+# ============================
+async def add_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.from_user.id != ADMIN_ID:
+        return await update.message.reply_text("⛔ Only admin can add users.")
 
-# ==========================
-#  FLASK WEBHOOK
-# ==========================
+    if len(context.args) == 0:
+        return await update.message.reply_text("❗ Usage: `/adduser 123456789`", parse_mode="Markdown")
 
-@app.route("/", methods=["GET"])
-def home():
-    return "Ares Bot Running!"
+    try:
+        uid = int(context.args[0])
+        allowed_users.add(uid)
+        await update.message.reply_text(f"✅ User `{uid}` added.", parse_mode="Markdown")
+    except:
+        await update.message.reply_text("❌ Invalid user ID.")
 
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    update = Update.de_json(request.json, bot)
-    dispatcher.process_update(update)
-    return "ok"
+
+# ============================
+# REMOVE USER
+# ============================
+async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.from_user.id != ADMIN_ID:
+        return await update.message.reply_text("⛔ Only admin can remove users.")
+
+    if len(context.args) == 0:
+        return await update.message.reply_text("❗ Usage: `/removeuser 123456789`", parse_mode="Markdown")
+
+    try:
+        uid = int(context.args[0])
+        allowed_users.discard(uid)
+        await update.message.reply_text(f"🗑 User `{uid}` removed.", parse_mode="Markdown")
+    except:
+        await update.message.reply_text("❌ Invalid user ID.")
+
+
+# ============================
+# SHOW USERS
+# ============================
+async def list_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.from_user.id != ADMIN_ID:
+        return await update.message.reply_text("⛔ Only admin allowed.")
+
+    text = "👤 **Allowed Users:**\n\n"
+    for u in allowed_users:
+        text += f"- `{u}`\n"
+
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+
+# ============================
+# MAIN BOT RUNNER
+# ============================
+def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("commands", commands))
+    app.add_handler(CommandHandler("lookup", lookup))
+    app.add_handler(CommandHandler("adduser", add_user))
+    app.add_handler(CommandHandler("removeuser", remove_user))
+    app.add_handler(CommandHandler("users", list_users))
+
+    print("✅ Bot Running...")
+    app.run_polling()
+
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    main()
