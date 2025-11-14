@@ -1,14 +1,30 @@
+import os
 import time
+import threading
 import requests
+from flask import Flask
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 # ============================
 # BOT SETTINGS
 # ============================
-BOT_TOKEN = "8573740591:AAFcvHHLyp9S9JoQMM3Em6vPsXoG_ZB4Cd0"
-ADMIN_ID = 6430768414
+BOT_TOKEN = os.getenv("BOT_TOKEN")  # Put your token in Render env
+ADMIN_ID = int(os.getenv("ADMIN_ID"))  # Your Telegram ID
 allowed_users = {ADMIN_ID}
+
+# ============================
+# FLASK KEEP-ALIVE
+# ============================
+app = Flask("")
+
+@app.route("/")
+def home():
+    return "Ares Premium Bot is running 🥂"
+
+def keep_alive():
+    t = threading.Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000))))
+    t.start()
 
 # ============================
 # ACCESS CHECK
@@ -103,26 +119,27 @@ async def list_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text)
 
 # ============================
-# BOT RUNNER WITH RECONNECT
+# BOT RUNNER WITH AUTO-RECONNECT
 # ============================
 def main():
+    keep_alive()  # Start Flask server for Render free Web Service
     while True:
         try:
-            app = ApplicationBuilder().token(BOT_TOKEN).build()
+            app_telegram = ApplicationBuilder().token(BOT_TOKEN).build()
 
-            app.add_handler(CommandHandler("start", start))
-            app.add_handler(CommandHandler("commands", commands))
-            app.add_handler(CommandHandler("lookup", lookup))
-            app.add_handler(CommandHandler("adduser", add_user))
-            app.add_handler(CommandHandler("removeuser", remove_user))
-            app.add_handler(CommandHandler("users", list_users))
+            app_telegram.add_handler(CommandHandler("start", start))
+            app_telegram.add_handler(CommandHandler("commands", commands))
+            app_telegram.add_handler(CommandHandler("lookup", lookup))
+            app_telegram.add_handler(CommandHandler("adduser", add_user))
+            app_telegram.add_handler(CommandHandler("removeuser", remove_user))
+            app_telegram.add_handler(CommandHandler("users", list_users))
 
             print("✅ Bot Running...")
-            app.run_polling()
+            app_telegram.run_polling()
         except Exception as e:
             print(f"❌ Bot crashed: {e}")
             print("⏳ Restarting in 5 seconds...")
-            time.sleep(5)  # Wait 5 sec before restarting
+            time.sleep(5)
 
 if __name__ == "__main__":
     main()
