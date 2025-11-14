@@ -9,8 +9,8 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 # ============================
 # BOT SETTINGS
 # ============================
-BOT_TOKEN = os.getenv("BOT_TOKEN")  # From Render environment
-ADMIN_ID = int(os.getenv("ADMIN_ID"))  # Your Telegram ID
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8573740591:AAFcvHHLyp9S9JoQMM3Em6vPsXoG_ZB4Cd0")
+ADMIN_ID = int(os.getenv("ADMIN_ID", "6430768414"))
 allowed_users = {ADMIN_ID}
 
 # ============================
@@ -22,6 +22,10 @@ app = Flask("")
 def home():
     return "Ares Premium Bot is running 🥂"
 
+@app.route("/favicon.ico")
+def favicon():
+    return "", 204  # Prevent 404 log
+
 def keep_alive():
     t = threading.Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000))))
     t.start()
@@ -31,6 +35,17 @@ def keep_alive():
 # ============================
 def is_allowed(user_id):
     return user_id in allowed_users or user_id == ADMIN_ID
+
+# ============================
+# UTILITY: SEND LONG MESSAGE
+# ============================
+async def send_long_message(update: Update, text: str):
+    limit = 4000
+    if len(text) <= limit:
+        await update.message.reply_text(text)
+        return
+    for i in range(0, len(text), limit):
+        await update.message.reply_text(text[i:i+limit])
 
 # ============================
 # START COMMAND
@@ -53,8 +68,15 @@ async def commands(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/adduser <id> – Add user (Admin only)\n"
         "/removeuser <id> – Remove user (Admin only)\n"
         "/users – Show allowed users\n"
+        "/test – Test bot responsiveness\n"
     )
     await update.message.reply_text(msg)
+
+# ============================
+# TEST COMMAND
+# ============================
+async def test(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("✅ Bot is running and responsive!")
 
 # ============================
 # LOOKUP COMMAND
@@ -79,7 +101,7 @@ async def lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text += f"**{key}:** `{value}`\n"
         if len(text) > 4000:
             text = text[:3990] + "\n\n⚠️ Result trimmed."
-        await update.message.reply_text(text)
+        await send_long_message(update, text)
     except Exception as e:
         await update.message.reply_text(f"❌ Lookup failed:\n`{e}`")
 
@@ -119,7 +141,7 @@ async def list_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text)
 
 # ============================
-# BOT RUNNER WITH AUTO-RECONNECT
+# BOT RUNNER
 # ============================
 def main():
     keep_alive()  # Start Flask server for Render free Web Service
@@ -133,6 +155,7 @@ def main():
             app_telegram.add_handler(CommandHandler("adduser", add_user))
             app_telegram.add_handler(CommandHandler("removeuser", remove_user))
             app_telegram.add_handler(CommandHandler("users", list_users))
+            app_telegram.add_handler(CommandHandler("test", test))
 
             print("✅ Bot Running...")
             app_telegram.run_polling()
